@@ -1,0 +1,49 @@
+spring:
+  batch:
+    jdbc:
+      initialize-schema: always
+  sql:
+    init:
+      mode: always
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mydb?currentSchema=transaction_processing
+    username: shyamoli
+    password: shyamoli
+    driver-class-name: org.postgresql.Driver
+
+batch:
+  cache:
+    memory:
+      enable: true
+      reload-jobs: loadStatementFileJob
+  app:
+    schema: transaction_processing
+    loadStatementFileJob:
+      loadStatementFileStep:
+        chunksize: 1000
+        reader:
+          basepath: /data/feeds/statement/in/
+          header-prefix: "00"
+          footer-prefix: "99"
+        processor:
+          record-length: 300
+        writer:
+          sql: INSERT INTO tbl_statement (service_type, year_month, account_no, product_code, stmt_ind, stmt_type, stmt_date, fee_amt, status, created_by, created_ts, updated_by, updated_ts) VALUES (:serviceType, :yearMonth, :accountNo, :productCode, :stmtInd, :stmtType, :stmtDate, :feeAmt, :status, :createdBy, :createdTs, :updatedBy, :updatedTs)
+#          sql: INSERT INTO tbl_statement (service_type, year_month, account_no, product_code, stmt_ind, stmt_type, stmt_date, created_by, created_ts, updated_by, updated_ts) VALUES (:serviceType, :yearMonth, :accountNo, :productCode, :stmtInd, :stmtType, :stmtDate, :createdBy, :createdTs, :updatedBy, :updatedTs)
+    computeStatementFeeJob:
+      computeStatementFeeJobStep:
+        reader:
+          chunksize: 1000
+        writer:
+          sql: UPDATE tbl_statement SET fee_amt=:feeAmt, status='Computed', updated_by=:updatedBy, updated_ts=:updatedTs WHERE id= :id
+    generateStatementFileJob:
+      outputFile:
+        path: src/test/resources/outfiles/
+      reader:
+        chunksize: 1000
+        sql: SELECT t FROM TblStatementEntity t WHERE t.status <> 'Exported'
+      writer:
+        sql: UPDATE tbl_statement SET status='Exported', updated_by=:updatedBy, updated_ts=:updatedTs WHERE id= :id
+#logging:
+#  level:
+#    root: DEBUG
